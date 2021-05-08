@@ -1,5 +1,9 @@
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as plt_patches
+import math
 from abc import abstractmethod
+
 try:
     from abc import ABC
 except:
@@ -9,9 +13,6 @@ except:
     class ABC(object):
         __metaclass__ = ABCMeta
         pass
-import matplotlib.pyplot as plt
-import matplotlib.patches as plt_patches
-import math
 
 # Colors
 CAR = '#F1C40F'
@@ -43,6 +44,7 @@ class TemporalState:
         """
         for state_id in range(len(self.members)):
             vars(self)[self.members[state_id]] += other[state_id]
+
         return self
 
 
@@ -287,6 +289,7 @@ class SpatialBicycleModel(ABC):
         cog = (self.temporal_state.x, self.temporal_state.y)
         # Get current angle with respect to x-axis
         yaw = np.rad2deg(self.temporal_state.psi)
+
         # Draw rectangle
         car = plt_patches.Rectangle(cog, width=self.length, height=self.width,
                                     angle=yaw, facecolor=CAR,
@@ -302,8 +305,23 @@ class SpatialBicycleModel(ABC):
                                  self.length / 2 *
                                  np.sin(self.temporal_state.psi)))
 
+        wheel = plt_patches.Rectangle(cog, width=self.length / 2, height=self.width / 2,
+                                    angle=yaw, facecolor=CAR,
+                                    edgecolor=CAR_OUTLINE, zorder=21)
+
+        wheel.set_x(car.get_x() - (self.length / 2 *
+                                 np.cos(self.temporal_state.psi) -
+                                 self.width / 2 *
+                                 np.sin(self.temporal_state.psi)))
+
+        wheel.set_y(car.get_y() - (self.width / 2 *
+                                 np.cos(self.temporal_state.psi) +
+                                 self.length / 2 *
+                                 np.sin(self.temporal_state.psi)))
+
         # Add rectangle to current axis
         ax = plt.gca()
+        ax.add_patch(wheel)
         ax.add_patch(car)
 
     @abstractmethod

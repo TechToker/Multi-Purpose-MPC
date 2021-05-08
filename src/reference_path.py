@@ -24,6 +24,7 @@ class Waypoint:
         orientation of waypoint psi and local curvature kappa. Waypoint further
         contains an associated reference velocity computed by the speed profile
         and a path width specified by upper and lower bounds.
+
         :param x: x position in global coordinate system | [m]
         :param y: y position in global coordinate system | [m]
         :param psi: orientation of waypoint | [rad]
@@ -70,6 +71,7 @@ class ReferencePath:
         corner points with given resolution. Smoothing around corners can be
         applied. Waypoints represent center-line of the path with specified
         maximum width to both sides.
+
         :param map: map object on which path will be placed
         :param wp_x: x coordinates of corner points in global coordinates
         :param wp_y: y coordinates of corner points in global coordinates
@@ -183,9 +185,11 @@ class ReferencePath:
             else:
                 prev_wp = np.array(waypoint_coordinates[wp_id - 1])
                 dif_behind = current_wp - prev_wp
+
                 angle_behind = np.arctan2(dif_behind[1], dif_behind[0])
                 angle_dif = np.mod(psi - angle_behind + math.pi, 2 * math.pi) \
                             - math.pi
+
                 kappa = angle_dif / (dist_ahead + self.eps)
 
             waypoints.append(Waypoint(x, y, psi, kappa))
@@ -214,6 +218,7 @@ class ReferencePath:
         for wp_id, wp in enumerate(self.waypoints):
             # List containing information for current waypoint
             width_info = []
+
             # Check width left and right of the center-line
             for i, dir in enumerate(['left', 'right']):
                 # Get angle orthogonal to path in current direction
@@ -226,6 +231,7 @@ class ReferencePath:
                 # Get closest cell to orthogonal vector
                 t_x, t_y = self.map.w2m(wp.x + max_width * np.cos(angle), wp.y
                                         + max_width * np.sin(angle))
+
                 # Compute distance to orthogonal cell on path border
                 b_value, b_cell = self._get_min_width(wp, t_x, t_y, max_width)
                 # Add information to list for current waypoint
@@ -235,6 +241,7 @@ class ReferencePath:
             # Set waypoint attributes with width to the left and right
             wp.ub = width_info[0]
             wp.lb = -1 * width_info[2]  # minus can be assumed as waypoints
+
             # represent center-line of the path
             # Set border cells of waypoint
             wp.static_border_cells = (width_info[1], width_info[3])
@@ -300,6 +307,7 @@ class ReferencePath:
         # Constraints
         a_min = np.ones(N-1) * Constraints['a_min']
         a_max = np.ones(N-1) * Constraints['a_max']
+
         v_min = np.ones(N) * Constraints['v_min']
         v_max = np.ones(N) * Constraints['v_max']
 
@@ -315,6 +323,7 @@ class ReferencePath:
             # Get information about current waypoint
             current_waypoint = self.get_waypoint(i)
             next_waypoint = self.get_waypoint(i+1)
+
             # distance between waypoints
             li = next_waypoint - current_waypoint
             # curvature of waypoint
@@ -343,7 +352,7 @@ class ReferencePath:
         P = sparse.eye(N, format='csc')
         q = -1 * v_max
 
-        # Solve optimization problem
+        # Solve speed profile optimization problem
         problem = osqp.OSQP()
         problem.setup(P=P, q=q, A=D, l=l, u=u, verbose=False)
         speed_profile = problem.solve().x
@@ -351,6 +360,7 @@ class ReferencePath:
         # Assign reference velocity to every waypoint
         for i, wp in enumerate(self.waypoints[:-1]):
             wp.v_ref = speed_profile[i]
+
         self.waypoints[-1].v_ref = self.waypoints[-2].v_ref
 
     def get_waypoint(self, wp_id):
@@ -497,19 +507,23 @@ class ReferencePath:
                 # Free cell detected
                 free_cells = True
                 lb_o = (x, y)
+
             # If cell is occupied or end of path, end segment. Add segment
             # to list of candidates. Then, reset upper and lower bound to
             # current cell.
             if (self.map.data[y, x] == 0 or (x, y) == lb_p) and free_cells:
                 # Set lower bound to border cell of segment
                 lb_o = (x, y)
+
                 # Transform upper and lower bound cells to world coordinates
                 ub_o = self.map.m2w(ub_o[0], ub_o[1])
                 lb_o = self.map.m2w(lb_o[0], lb_o[1])
+
                 # If segment larger than threshold, add to candidates
                 if np.sqrt((ub_o[0]-lb_o[0])**2 + (ub_o[1]-lb_o[1])**2) > \
                     min_width:
                     free_segments.append((ub_o, lb_o))
+
                 # Start new segment
                 ub_o = (x, y)
                 free_cells = False
@@ -523,11 +537,14 @@ class ReferencePath:
         """
         Compute upper and lower bounds of the drivable area orthogonal to
         the given waypoint.
+
+        Select best segments by knowing further obstacles and prev. path
         """
 
         # container for constraints and border cells
         ub_hor = []
         lb_hor = []
+
         border_cells_hor = []
         border_cells_hor_sm = []
 
@@ -535,7 +552,7 @@ class ReferencePath:
         for n in range(N):
 
             # get corresponding waypoint
-            wp = self.get_waypoint(wp_id+n)
+            wp = self.get_waypoint(wp_id + n)
 
             # Get list of free segments
             free_segments = self._compute_free_segments(wp, min_width)
@@ -544,11 +561,11 @@ class ReferencePath:
             if n == 0:
                 segment_lengths = [np.sqrt((seg[0][0]-seg[1][0])**2 +
                             (seg[0][1]-seg[1][1])**2) for seg in free_segments]
+
                 ls_id = segment_lengths.index(max(segment_lengths))
                 ub_ls, lb_ls = free_segments[ls_id]
 
             else:
-
                 # Get border cells of selected segment at previous waypoint
                 ub_pw, lb_pw = border_cells_hor[n-1]
                 ub_pw, lb_pw = list(ub_pw), list(lb_pw)
@@ -556,6 +573,7 @@ class ReferencePath:
                 # Project border cells onto new waypoint in path direction
                 wp_prev = self.get_waypoint(wp_id+n-1)
                 delta_s = wp_prev - wp
+
                 ub_pw[0] += delta_s * np.cos(wp_prev.psi)
                 ub_pw[1] += delta_s * np.cos(wp_prev.psi)
                 lb_pw[0] += delta_s * np.sin(wp_prev.psi)
@@ -623,12 +641,12 @@ class ReferencePath:
                                   2 * math.pi) - math.pi
             angle_lb = np.mod(-math.pi / 2 + wp.psi + math.pi,
                                   2 * math.pi) - math.pi
+
             # Compute cell on bound for computed distance ub and lb
-            ub_ls = wp.x + ub * np.cos(angle_ub), wp.y + ub * np.sin(
-                    angle_ub)
-            lb_ls = wp.x - lb * np.cos(angle_lb), wp.y - lb * np.sin(
-                    angle_lb)
+            ub_ls = wp.x + ub * np.cos(angle_ub), wp.y + ub * np.sin(angle_ub)
+            lb_ls = wp.x - lb * np.cos(angle_lb), wp.y - lb * np.sin(angle_lb)
             bound_cells_sm = (ub_ls, lb_ls)
+
             # Compute cell on bound for computed distance ub and lb
             ub_ls = wp.x + (ub + safety_margin) * np.cos(angle_ub), wp.y + (ub + safety_margin) * np.sin(
                 angle_ub)
@@ -639,6 +657,7 @@ class ReferencePath:
             # Append results
             ub_hor.append(ub)
             lb_hor.append(lb)
+
             border_cells_hor.append(list(bound_cells))
             border_cells_hor_sm.append(list(bound_cells_sm))
 
@@ -650,92 +669,47 @@ class ReferencePath:
 
 if __name__ == '__main__':
 
-    # Select Track | 'Real_Track' or 'Sim_Track'
-    path = 'Sim_Track'
+    # Load map file
+    map = Map(file_path='maps/sim_map.png', origin=[-1, -2], resolution=0.005)
 
-    if path == 'Sim_Track':
+    # Specify waypoints
+    wp_x = [-0.75, -0.25, -0.25, 0.25, 0.25, 1.25, 1.25, 0.75, 0.75, 1.25,
+            1.25, -0.75, -0.75, -0.25]
+    wp_y = [-1.5, -1.5, -0.5, -0.5, -1.5, -1.5, -1, -1, -0.5, -0.5, 0, 0,
+            -1.5, -1.5]
 
-        # Load map file
-        map = Map(file_path='maps/sim_map.png', origin=[-1, -2], resolution=0.005)
+    # Specify path resolution
+    path_resolution = 0.05  # m / wp
 
-        # Specify waypoints
-        wp_x = [-0.75, -0.25, -0.25, 0.25, 0.25, 1.25, 1.25, 0.75, 0.75, 1.25,
-                1.25, -0.75, -0.75, -0.25]
-        wp_y = [-1.5, -1.5, -0.5, -0.5, -1.5, -1.5, -1, -1, -0.5, -0.5, 0, 0,
-                -1.5, -1.5]
+    # Create reference path
+    reference_path = ReferencePath(map, wp_x, wp_y, path_resolution,
+                                   smoothing_distance=5,
+                                   max_width=0.15,
+                                   circular=True)
 
-        # Specify path resolution
-        path_resolution = 0.05  # m / wp
-
-        # Create reference path
-        reference_path = ReferencePath(map, wp_x, wp_y, path_resolution,
-                     smoothing_distance=5, max_width=0.15,
-                                       circular=True)
-
-        # Add obstacles
-        obs1 = Obstacle(cx=0.0, cy=0.0, radius=0.05)
-        obs2 = Obstacle(cx=-0.8, cy=-0.5, radius=0.08)
-        obs3 = Obstacle(cx=-0.7, cy=-1.5, radius=0.05)
-        obs4 = Obstacle(cx=-0.3, cy=-1.0, radius=0.08)
-        obs5 = Obstacle(cx=0.3, cy=-1.0, radius=0.05)
-        obs6 = Obstacle(cx=0.75, cy=-1.5, radius=0.05)
-        obs7 = Obstacle(cx=0.7, cy=-0.9, radius=0.07)
-        obs8 = Obstacle(cx=1.2, cy=0.0, radius=0.08)
-        reference_path.map.add_obstacles([obs1, obs2, obs3, obs4, obs5, obs6, obs7,
-                                      obs8])
-
-    elif path == 'Real_Track':
-
-        # Load map file
-        map = Map(file_path='maps/real_map.png', origin=(-30.0, -24.0),
-                  resolution=0.06)
-
-        # Specify waypoints
-        wp_x = [-1.62, -6.04, -6.6, -5.36, -2.0, 5.9,
-                11.9, 7.3, 0.0, -1.62]
-        wp_y = [3.24, -1.4, -3.0, -5.36, -6.65, 3.5,
-                10.9, 14.5, 5.2, 3.24]
-
-        # Specify path resolution
-        path_resolution = 0.2  # m / wp
-
-        # Create reference path
-        reference_path = ReferencePath(map, wp_x, wp_y, path_resolution,
-                                       smoothing_distance=5, max_width=2.0,
-                                       circular=True)
-
-        # Add obstacles and bounds to map
-        cone1 = Obstacle(-5.9, -2.9, 0.2)
-        cone2 = Obstacle(-2.3, -5.9, 0.2)
-        cone3 = Obstacle(10.9, 10.7, 0.2)
-        cone4 = Obstacle(7.4, 13.5, 0.2)
-        table1 = Obstacle(-0.30, -1.75, 0.2)
-        table2 = Obstacle(1.55, 1.00, 0.2)
-        table3 = Obstacle(4.30, 3.22, 0.2)
-        obstacle_list = [cone1, cone2, cone3, cone4, table1, table2, table3]
-        map.add_obstacles(obstacle_list)
-
-        bound1 = ((-0.02, -2.72), (1.5, 1.0))
-        bound2 = ((4.43, 3.07), (1.5, 1.0))
-        bound3 = ((4.43, 3.07), (7.5, 6.93))
-        bound4 = ((7.28, 13.37), (-3.32, -0.12))
-        boundary_list = [bound1, bound2, bound3, bound4]
-        map.add_boundary(boundary_list)
-
-    else:
-        reference_path = None
-        print('Invalid path!')
-        exit(1)
+    # Add obstacles
+    obs1 = Obstacle(cx=0.0, cy=0.0, radius=0.05)
+    obs2 = Obstacle(cx=-0.8, cy=-0.5, radius=0.08)
+    obs3 = Obstacle(cx=-0.7, cy=-1.5, radius=0.05)
+    obs4 = Obstacle(cx=-0.3, cy=-1.0, radius=0.08)
+    obs5 = Obstacle(cx=0.3, cy=-1.0, radius=0.05)
+    obs6 = Obstacle(cx=0.75, cy=-1.5, radius=0.05)
+    obs7 = Obstacle(cx=0.7, cy=-0.9, radius=0.07)
+    obs8 = Obstacle(cx=1.2, cy=0.0, radius=0.08)
+    reference_path.map.add_obstacles([obs1, obs2, obs3, obs4, obs5, obs6, obs7,obs8])
 
     ub, lb, border_cells = \
-        reference_path.update_path_constraints(0, reference_path.n_waypoints,
-                                               0.1, 0.01)
+        reference_path.update_path_constraints(0, reference_path.n_waypoints, 0.1, 0.01)
+
     SpeedProfileConstraints = {'a_min': -0.1, 'a_max': 0.5,
                                'v_min': 0, 'v_max': 1.0, 'ay_max': 4.0}
+
     reference_path.compute_speed_profile(SpeedProfileConstraints)
+
     # Get x and y locations of border cells for upper and lower bound
     for wp_id in range(reference_path.n_waypoints):
         reference_path.waypoints[wp_id].dynamic_border_cells = border_cells[wp_id]
+
     reference_path.show()
     plt.show()
 

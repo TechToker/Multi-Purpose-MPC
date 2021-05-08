@@ -4,6 +4,7 @@ from skimage.morphology import remove_small_holes
 from PIL import Image
 from skimage.draw import line_aa
 import matplotlib.patches as plt_patches
+import matplotlib.cm as cm
 
 # Colors
 OBSTACLE = '#2E4053'
@@ -47,10 +48,8 @@ class Map:
         Constructor for map object. Map contains occupancy grid map data of
         environment as well as meta information.
         :param file_path: path to image of map
-        :param threshold_occupied: threshold value for binarization of map
-        image
-        :param origin: x and y coordinates of map origin in world coordinates
-        [m]
+        :param threshold_occupied: threshold value for binarization of map image
+        :param origin: x and y coordinates of map origin in world coordinates [m]
         :param resolution: resolution in m/px
         """
 
@@ -66,8 +65,10 @@ class Map:
         # Store meta information
         self.height = self.data.shape[0]  # height of the map in px
         self.width = self.data.shape[1]  # width of the map in px
+
         self.resolution = resolution  # resolution of the map in m/px
         self.origin = origin  # x and y coordinates of map origin
+
         # (bottom-left corner) in m
 
         # Containers for user-specified additional obstacles and boundaries
@@ -133,8 +134,8 @@ class Map:
             # Add circular object to map
             y, x = np.ogrid[-radius_px: radius_px, -radius_px: radius_px]
             index = x ** 2 + y ** 2 <= radius_px ** 2
-            self.data[cy_px-radius_px:cy_px+radius_px, cx_px-radius_px:
-                                                cx_px+radius_px][index] = 0
+
+            self.data[cy_px-radius_px:cy_px+radius_px, cx_px-radius_px:cx_px+radius_px][index] = 0
 
     def add_boundary(self, boundaries):
         """
@@ -150,13 +151,9 @@ class Map:
         for boundary in boundaries:
             sx = self.w2m(boundary[0][0], boundary[0][1])
             gx = self.w2m(boundary[1][0], boundary[1][1])
+
             path_x, path_y, _ = line_aa(sx[0], sx[1], gx[0], gx[1])
+
             for x, y in zip(path_x, path_y):
                 self.data[y, x] = 0
 
-
-if __name__ == '__main__':
-    map = Map('maps/real_map.png')
-    # map = Map('maps/sim_map.png')
-    plt.imshow(np.flipud(map.data), cmap='gray')
-    plt.show()
