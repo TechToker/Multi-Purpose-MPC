@@ -17,7 +17,8 @@ except:
 # Colors
 CAR = '#F1C40F'
 CAR_OUTLINE = '#B7950B'
-
+WHEEL = '#4D4D4D'
+WHEEL_OUTLINE = '#000000'
 
 #########################
 # Temporal State Vector #
@@ -116,7 +117,7 @@ class SimpleSpatialState(SpatialState):
 ####################################
 
 class SpatialBicycleModel(ABC):
-    def __init__(self, reference_path, length, width, Ts):
+    def __init__(self, reference_path, length, width, delta_time):
         """
         Abstract Base Class for Spatial Reformulation of Bicycle Model.
         :param reference_path: reference path object to follow
@@ -133,6 +134,10 @@ class SpatialBicycleModel(ABC):
         self.width = width
         self.safety_margin = self._compute_safety_margin()
 
+        # Steering angle for visualisation propose only!
+        self.current_delta = 0
+        self.prev_delta = 0
+
         # Reference Path
         self.reference_path = reference_path
 
@@ -140,7 +145,7 @@ class SpatialBicycleModel(ABC):
         self.s = 0.0
 
         # Set sampling time
-        self.Ts = Ts
+        self.Ts = delta_time
 
         # Set initial waypoint ID
         self.wp_id = 0
@@ -163,17 +168,24 @@ class SpatialBicycleModel(ABC):
         """
 
         # Compute temporal state variables
+
+        # If reference state is array
         if isinstance(reference_state, np.ndarray):
             x = reference_waypoint.x - reference_state[0] * np.sin(
                 reference_waypoint.psi)
+
             y = reference_waypoint.y + reference_state[0] * np.cos(
                 reference_waypoint.psi)
+
             psi = reference_waypoint.psi + reference_state[1]
+        # If reference state is SpartialState
         elif isinstance(reference_state, SpatialState):
             x = reference_waypoint.x - reference_state.e_y * np.sin(
                 reference_waypoint.psi)
+
             y = reference_waypoint.y + reference_state.e_y * np.cos(
                 reference_waypoint.psi)
+
             psi = reference_waypoint.psi + reference_state.e_psi
         else:
             print('Reference State type not supported!')
@@ -229,13 +241,19 @@ class SpatialBicycleModel(ABC):
         # Get input signals
         v, delta = u
 
+        # For visualisation purpose
+        self.prev_delta = delta
+        self.current_delta = self.prev_delta
+
         # Compute temporal state derivatives
         x_dot = v * np.cos(self.temporal_state.psi)
         y_dot = v * np.sin(self.temporal_state.psi)
         psi_dot = v / self.length * np.tan(delta)
+
         temporal_derivatives = np.array([x_dot, y_dot, psi_dot])
 
         # Update spatial state (Forward Euler Approximation)
+        # Coordinates += new_velocity * delta time
         self.temporal_state += temporal_derivatives * self.Ts
 
         # Compute velocity along path
@@ -300,24 +318,26 @@ class SpatialBicycleModel(ABC):
                                  np.cos(self.temporal_state.psi) -
                                  self.width / 2 *
                                  np.sin(self.temporal_state.psi)))
+
         car.set_y(car.get_y() - (self.width / 2 *
                                  np.cos(self.temporal_state.psi) +
                                  self.length / 2 *
                                  np.sin(self.temporal_state.psi)))
 
-        wheel = plt_patches.Rectangle(cog, width=self.length / 2, height=self.width / 2,
-                                    angle=yaw, facecolor=CAR,
-                                    edgecolor=CAR_OUTLINE, zorder=21)
+        # It don't work with other params (problem with wheel_length / 4)
+        wheel_length = self.length / 2
+        wheel_height = self.width / 2
+        wheel_yaw = yaw + np.rad2deg(self.prev_delta)
 
-        wheel.set_x(car.get_x() - (self.length / 2 *
-                                 np.cos(self.temporal_state.psi) -
-                                 self.width / 2 *
-                                 np.sin(self.temporal_state.psi)))
+        wheel = plt_patches.Rectangle(cog, width=wheel_length, height=wheel_height,
+                                    angle=wheel_yaw, facecolor=WHEEL,
+                                    edgecolor=WHEEL_OUTLINE, zorder=21)
 
-        wheel.set_y(car.get_y() - (self.width / 2 *
-                                 np.cos(self.temporal_state.psi) +
-                                 self.length / 2 *
-                                 np.sin(self.temporal_state.psi)))
+        wheel.set_x(wheel.get_x() + (self.length / 2 - wheel_length / 2) * np.cos(self.temporal_state.psi)
+                                  + (wheel_length / 4 * np.sin(self.temporal_state.psi)))
+
+        wheel.set_y(wheel.get_y() + (self.length / 2 - wheel_length / 2) * np.sin(self.temporal_state.psi)
+                                  - (wheel_length / 4 * np.cos(self.temporal_state.psi)))
 
         # Add rectangle to current axis
         ax = plt.gca()
