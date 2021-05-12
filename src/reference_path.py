@@ -9,6 +9,7 @@ import osqp
 # Colors
 DRIVABLE_AREA = '#BDC3C7'
 WAYPOINTS = '#D0D3D4'
+REF_WAYPOINTS = '#966b68'
 PATH_CONSTRAINTS = '#F5B041'
 OBSTACLE = '#2E4053'
 
@@ -98,6 +99,7 @@ class ReferencePath:
         self.circular = circular
 
         # List of waypoint objects
+        self.reference_waypoints = [wp_x, wp_y]
         self.waypoints = self._construct_path(wp_x, wp_y)
 
         # Number of waypoints
@@ -108,6 +110,8 @@ class ReferencePath:
 
         # Compute path width (attribute of each waypoint)
         self._compute_width(max_width=max_width)
+
+        self.reference_velocity_profile = None
 
     def _construct_path(self, wp_x, wp_y):
         """
@@ -339,6 +343,8 @@ class ReferencePath:
             if v_max_dyn < v_max[i]:
                 v_max[i] = v_max_dyn
 
+        self.reference_velocity_profile = v_max
+
         # Construct inequality matrix
         D1 = sparse.csc_matrix(D1)
         D2 = sparse.eye(N)
@@ -417,6 +423,9 @@ class ReferencePath:
         # Plot waypoints
         # colors = [wp.v_ref for wp in self.waypoints]
         plt.scatter(wp_x, wp_y, c=WAYPOINTS, s=10)
+
+        # Plot reference points
+        plt.scatter(self.reference_waypoints[0], self.reference_waypoints[1], c=REF_WAYPOINTS, s=10)
 
         # Plot arrows indicating drivable area
         if display_drivable_area:

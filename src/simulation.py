@@ -17,10 +17,8 @@ def GenerateMap():
     map = Map(file_path='maps/sim_map.png', origin=[-1, -2], resolution=0.005)
 
     # Specify waypoints
-    wp_x = [-0.75, -0.25, -0.25, 0.25, 0.25, 1.25, 1.25, 0.75, 0.75, 1.25,
-            1.25, -0.75, -0.75, -0.25]
-    wp_y = [-1.5, -1.5, -0.5, -0.5, -1.5, -1.5, -1, -1, -0.5, -0.5, 0, 0,
-            -1.5, -1.5]
+    wp_x = [-0.75, -0.25, -0.25, 0.25, 0.25, 1.25, 1.25, 0.75, 0.75, 1.25, 1.25, -0.75, -0.75, -0.25]
+    wp_y = [-1.5, -1.5, -0.5, -0.5, -1.5, -1.5, -1, -1, -0.5, -0.5, 0, 0, -1.5, -1.5]
 
     # Specify path resolution
     path_resolution = 0.05  # m / wp
@@ -86,8 +84,6 @@ def Simulation(car, reference_path, mpc):
         # Get control signals
         u = mpc.get_control()
 
-        print(f"Delta: {u[1], math.degrees(u[1])}")
-
         # Simulate car
         car.drive(u)
 
@@ -97,7 +93,7 @@ def Simulation(car, reference_path, mpc):
         v_log.append(u[0])
 
         # Increment simulation time
-        t += car.Ts
+        t += car.deltaTime
 
         # Plot path and drivable area
         reference_path.show()
@@ -115,17 +111,36 @@ def Simulation(car, reference_path, mpc):
         plt.axis('off')
         plt.pause(0.001)
 
+    plt.show()
+
+    plt.figure()
+
+    target_vel = reference_path.reference_velocity_profile
+    real_vel = car.velocity_profile
+
+    print(len(target_vel))
+    print(len(real_vel))
+
+    plt.plot(np.linspace(0, len(target_vel), num=len(target_vel)), target_vel, color='r')
+    plt.plot(np.linspace(0, len(real_vel), num=len(real_vel)), real_vel, color='g')
+
+    plt.ylabel('Velocity')
+    plt.xlabel('Waypoint id')
+
+    plt.show()
+
 
 def Main():
     reference_path = GenerateMap()
 
     # Instantiate motion model
-    car = BicycleModel(length=0.12, width=0.06, reference_path=reference_path, Ts=0.05)
+    car = BicycleModel(length=0.12, width=0.06, reference_path=reference_path, delta_time=0.05)
     control = GenerateControl(car)
 
     # Compute speed profile
     a_min = -0.1  # m/s^2
     a_max = 0.5  # m/s^2
+
     SpeedProfileConstraints = {'a_min': a_min, 'a_max': a_max,
                                'v_min': 0.0, 'v_max': v_max, 'ay_max': ay_max}
     car.reference_path.compute_speed_profile(SpeedProfileConstraints)

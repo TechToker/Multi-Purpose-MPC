@@ -123,7 +123,7 @@ class SpatialBicycleModel(ABC):
         :param reference_path: reference path object to follow
         :param length: length of car in m
         :param width: width of car in m
-        :param Ts: sampling time of model
+        :param delta_time: sampling time of model
         """
 
         # Precision
@@ -145,7 +145,7 @@ class SpatialBicycleModel(ABC):
         self.s = 0.0
 
         # Set sampling time
-        self.Ts = delta_time
+        self.deltaTime = delta_time
 
         # Set initial waypoint ID
         self.wp_id = 0
@@ -158,6 +158,10 @@ class SpatialBicycleModel(ABC):
 
         # Declare temporal state variable | Initialization in sub-class
         self.temporal_state = None
+
+        # For visualisation
+        self.velocity_profile = []
+        self.reference_velocity_profile = []
 
     def s2t(self, reference_waypoint, reference_state):
         """
@@ -244,6 +248,7 @@ class SpatialBicycleModel(ABC):
         # For visualisation purpose
         self.prev_delta = delta
         self.current_delta = self.prev_delta
+        self.velocity_profile.append(v)
 
         # Compute temporal state derivatives
         x_dot = v * np.cos(self.temporal_state.psi)
@@ -254,14 +259,14 @@ class SpatialBicycleModel(ABC):
 
         # Update spatial state (Forward Euler Approximation)
         # Coordinates += new_velocity * delta time
-        self.temporal_state += temporal_derivatives * self.Ts
+        self.temporal_state += temporal_derivatives * self.deltaTime
 
         # Compute velocity along path
         s_dot = 1 / (1 - self.spatial_state.e_y * self.current_waypoint.kappa) \
                 * v * np.cos(self.spatial_state.e_psi)
 
         # Update distance travelled along reference path
-        self.s += s_dot * self.Ts
+        self.s += s_dot * self.deltaTime
 
     def _compute_safety_margin(self):
         """
@@ -280,10 +285,12 @@ class SpatialBicycleModel(ABC):
 
         # Compute cumulative path length
         length_cum = np.cumsum(self.reference_path.segment_lengths)
+
         # Get first index with distance larger than distance traveled by car
         # so far
         greater_than_threshold = length_cum > self.s
         next_wp_id = greater_than_threshold.searchsorted(True)
+
         # Get previous index
         prev_wp_id = next_wp_id - 1
 
@@ -305,6 +312,7 @@ class SpatialBicycleModel(ABC):
 
         # Get car's center of gravity
         cog = (self.temporal_state.x, self.temporal_state.y)
+
         # Get current angle with respect to x-axis
         yaw = np.rad2deg(self.temporal_state.psi)
 
@@ -358,19 +366,19 @@ class SpatialBicycleModel(ABC):
 #################
 
 class BicycleModel(SpatialBicycleModel):
-    def __init__(self, reference_path, length, width, Ts):
+    def __init__(self, reference_path, length, width, delta_time):
         """
         Simplified Spatial Bicycle Model. Spatial Reformulation of Kinematic
         Bicycle Model. Uses Simplified Spatial State.
         :param reference_path: reference path model is supposed to follow
         :param length: length of the car in m
         :param width: with of the car in m
-        :param Ts: sampling time of model in s
+        :param delta_time: sampling time of model in s
         """
 
         # Initialize base class
         super(BicycleModel, self).__init__(reference_path, length=length,
-                                           width=width, Ts=Ts)
+                                           width=width, delta_time=delta_time)
 
         # Initialize spatial state
         self.spatial_state = SimpleSpatialState()
