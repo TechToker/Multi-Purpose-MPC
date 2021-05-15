@@ -46,7 +46,9 @@ class Waypoint:
         # Lower bound: free drivable area to the right of center-line in m
         self.lb = None
         self.ub = None
+        # Static border - track width
         self.static_border_cells = None
+        # Dynamic border - with taking into account obstacles
         self.dynamic_border_cells = None
 
     def __sub__(self, other):
@@ -111,7 +113,9 @@ class ReferencePath:
         # Compute path width (attribute of each waypoint)
         self._compute_width(max_width=max_width)
 
+        self.max_velocity_profile = None
         self.reference_velocity_profile = None
+        self.distance_between_waypoints = []
 
     def _construct_path(self, wp_x, wp_y):
         """
@@ -308,6 +312,9 @@ class ReferencePath:
         # Set optimization horizon
         N = self.n_waypoints - 1
 
+        # # Debug
+        # N = 3
+
         # Constraints
         a_min = np.ones(N-1) * Constraints['a_min']
         a_max = np.ones(N-1) * Constraints['a_max']
@@ -330,24 +337,28 @@ class ReferencePath:
 
             # distance between waypoints
             li = next_waypoint - current_waypoint
+            self.distance_between_waypoints.append(li)
+
             # curvature of waypoint
             ki = current_waypoint.kappa
 
             # Fill operator matrix
             # dynamics of acceleration
+            mtrx = np.array([-1/(2*li), 1/(2*li)])
+
             if i < N-1:
-                D1[i, i:i+2] = np.array([-1/(2*li), 1/(2*li)])
+                # Write 2 dim array on main diagonal + right on it
+                D1[i, i:i+2] = mtrx
 
             # Compute dynamic constraint on velocity
             v_max_dyn = np.sqrt(ay_max / (np.abs(ki) + self.eps))
             if v_max_dyn < v_max[i]:
                 v_max[i] = v_max_dyn
 
-        self.reference_velocity_profile = v_max
-
         # Construct inequality matrix
         D1 = sparse.csc_matrix(D1)
         D2 = sparse.eye(N)
+
         D = sparse.vstack([D1, D2], format='csc')
 
         # Get upper and lower bound vectors for inequality constraints
@@ -366,6 +377,9 @@ class ReferencePath:
         # Assign reference velocity to every waypoint
         for i, wp in enumerate(self.waypoints[:-1]):
             wp.v_ref = speed_profile[i]
+
+        self.max_velocity_profile = v_max
+        self.reference_velocity_profile = speed_profile
 
         self.waypoints[-1].v_ref = self.waypoints[-2].v_ref
 
@@ -548,6 +562,11 @@ class ReferencePath:
         the given waypoint.
 
         Select best segments by knowing further obstacles and prev. path
+
+        That method basically need for obstacle avoidance
+
+        Return distance to left and right borders from waypoints centers (for N waypoints)
+        and list of left and right boundary in world coordinate frame
         """
 
         # container for constraints and border cells

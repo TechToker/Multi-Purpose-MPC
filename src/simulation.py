@@ -50,9 +50,18 @@ def GenerateMap():
 # Controller
 def GenerateControl(car):
     N = 30
+
+    # Debug
+    #N = 3
+
     Q = sparse.diags([1.0, 0.0, 0.0])
     R = sparse.diags([0.5, 0.0])
     QN = sparse.diags([1.0, 0.0, 0.0])
+
+    # Debug
+    # Q = sparse.diags([1.0, 2.0, 3.0])
+    # R = sparse.diags([4.0, 0])
+    # QN = sparse.diags([6.0, 7.0, 8.0])
 
     InputConstraints = {'umin': np.array([0.0, -np.tan(delta_max)/car.length]),
                         'umax': np.array([v_max, np.tan(delta_max)/car.length])}
@@ -63,6 +72,36 @@ def GenerateControl(car):
     mpc_control = MPC(car, N, Q, R, QN, StateConstraints, InputConstraints, ay_max)
 
     return mpc_control
+
+
+def show_profiler(ref_path):
+    fig, (ax1, ax2) = plt.subplots(num=1, nrows=2)
+
+    vel_profile = ref_path.reference_velocity_profile #[:current_waypoint]
+    vel_constrained = ref_path.max_velocity_profile #[:current_waypoint]
+
+    ax1.plot(np.linspace(0, len(vel_profile), num=len(vel_profile)), vel_profile, color='g')
+    ax1.plot(np.linspace(0, len(vel_constrained), num=len(vel_constrained)), vel_constrained, color='r')
+
+    ax1.set_ylabel('Velocity')
+    ax1.set_xlabel('Waypoint id')
+
+    # Acceleration profile
+    vel_profile = ref_path.reference_velocity_profile #[:current_waypoint]
+    distance_between_wp = ref_path.distance_between_waypoints #[:current_waypoint]
+
+    acc_profile = []
+    for i in range(1, len(vel_profile)):
+        acc_profile.append((vel_profile[i] - vel_profile[i - 1]) / (2 * distance_between_wp[i - 1]))
+
+    ax2.plot(range(0, len(acc_profile)), acc_profile, color='g')
+
+    # Boundaries
+    ax2.plot(range(0, len(acc_profile)), np.ones(len(acc_profile)) * -0.1, color='r')
+    ax2.plot(range(0, len(acc_profile)), np.ones(len(acc_profile)) * 0.5, color='r')
+
+    ax2.set_ylabel('Acceleration')
+    ax2.set_xlabel('Waypoint id')
 
 
 def Simulation(car, reference_path, mpc):
@@ -78,8 +117,12 @@ def Simulation(car, reference_path, mpc):
     y_log = [car.temporal_state.y]
     v_log = [0.0]
 
+    # Velocity profile
+    show_profiler(reference_path)
+
     # Until arrival at end of path
     while car.s < reference_path.length:
+        plt.figure(0)
 
         # Get control signals
         u = mpc.get_control()
@@ -110,22 +153,6 @@ def Simulation(car, reference_path, mpc):
 
         plt.axis('off')
         plt.pause(0.001)
-
-    plt.show()
-
-    plt.figure()
-
-    target_vel = reference_path.reference_velocity_profile
-    real_vel = car.velocity_profile
-
-    print(len(target_vel))
-    print(len(real_vel))
-
-    plt.plot(np.linspace(0, len(target_vel), num=len(target_vel)), target_vel, color='r')
-    plt.plot(np.linspace(0, len(real_vel), num=len(real_vel)), real_vel, color='g')
-
-    plt.ylabel('Velocity')
-    plt.xlabel('Waypoint id')
 
     plt.show()
 

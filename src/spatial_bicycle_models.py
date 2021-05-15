@@ -160,8 +160,8 @@ class SpatialBicycleModel(ABC):
         self.temporal_state = None
 
         # For visualisation
-        self.velocity_profile = []
-        self.reference_velocity_profile = []
+        # self.velocity_profile = []
+        # self.reference_velocity_profile = []
 
     def s2t(self, reference_waypoint, reference_state):
         """
@@ -248,7 +248,7 @@ class SpatialBicycleModel(ABC):
         # For visualisation purpose
         self.prev_delta = delta
         self.current_delta = self.prev_delta
-        self.velocity_profile.append(v)
+        #self.velocity_profile.append(v)
 
         # Compute temporal state derivatives
         x_dot = v * np.cos(self.temporal_state.psi)
@@ -445,6 +445,8 @@ class BicycleModel(SpatialBicycleModel):
         ###################
         # System Matrices #
         ###################
+
+        # Formulation (14)
 
         # Construct Jacobian Matrix
         a_1 = np.array([1, delta_s, 0])

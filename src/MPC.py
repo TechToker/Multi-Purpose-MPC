@@ -36,7 +36,9 @@ class MPC:
         self.model = model
 
         # Dimensions
-        self.nx = self.model.n_states
+        # Number of state variables
+        self.nx = self.model.n_states # =3
+        # Number of input variables
         self.nu = 2
 
         # Constraints
@@ -74,8 +76,11 @@ class MPC:
         A = np.zeros((self.nx * (self.N + 1), self.nx * (self.N + 1)))
         B = np.zeros((self.nx * (self.N + 1), self.nu * (self.N)))
 
-        # Reference vector for state and input variables
+        # Reference vector for state variables
+        # Include reference for each prediction
         ur = np.zeros(self.nu*self.N)
+
+        # Reference vector for input variables
         xr = np.zeros(self.nx*(self.N+1))
 
         # Offset for equality constraint (due to B * (u - ur))
@@ -106,22 +111,38 @@ class MPC:
 
             # Compute LTV matrices
             f, A_lin, B_lin = self.model.linearize(v_ref, kappa_ref, delta_s)
+
+            # Generate big matrices A and B which include every of N MPC-predictions
+            # A - square matrix (number of predictions * state shape)
+            # B shape - [number of predictions * state shape, number of pred * input shape]
             A[(n+1) * self.nx: (n+2)*self.nx, n * self.nx:(n+1)*self.nx] = A_lin
             B[(n+1) * self.nx: (n+2)*self.nx, n * self.nu:(n+1)*self.nu] = B_lin
 
             # Set reference for input signal
+            # Write reference velocity and curvature of waypoint for each prediction
             ur[n*self.nu:(n+1)*self.nu] = np.array([v_ref, kappa_ref])
 
             # Compute equality constraint offset (B*ur)
+            # Equality constraint are constraints that always have to be enforced
+
+            # It is the same
+            test = B_lin.dot(np.array([v_ref, kappa_ref])) - f
+            my_solution = np.array([0, delta_s * kappa_ref, - (2 * delta_s) / v_ref])
+            #print(f"{n} {test[2]}, {my_solution[2]} {test[2] == my_solution[2]}")
+
             uq[n * self.nx:(n+1)*self.nx] = B_lin.dot(np.array([v_ref, kappa_ref])) - f
 
             # Constrain maximum speed based on predicted car curvature
+            # Зачем это делать во второй раз?? Reference trajectory это уже делала
+            # Причем строчка в строчку (дубликат?)
             vmax_dyn = np.sqrt(self.ay_max / (np.abs(kappa_pred[n]) + 1e-12))
-
             if vmax_dyn < umax_dyn[self.nu*n]:
                 umax_dyn[self.nu*n] = vmax_dyn
 
         # Compute dynamic constraints on e_y
+        # Ub and lb are boundary of the track (basically its needed just to realtime check track on obstacles)
+        # Boundary w.r.t reference path
+        # For each N waypoints in front
         ub, lb, _ = self.model.reference_path.update_path_constraints(
                     self.model.wp_id+1,
                     self.N,
@@ -131,11 +152,18 @@ class MPC:
         xmin_dyn[0] = self.model.spatial_state.e_y
         xmax_dyn[0] = self.model.spatial_state.e_y
 
+        # Lb and ub shape [N]
+        # But xmin_dyn shape - [N * 3 + 3]
+        # That lines basically write lb elements at each third cell (at 3, 6...) except 0
         xmin_dyn[self.nx::self.nx] = lb
         xmax_dyn[self.nx::self.nx] = ub
 
         # Set reference for state as center-line of drivable area
+        # [self.nx::self.nx] - write to every nx (third) element, starting at index nx
+        # That means first nx-elements stays zeros, and every nx-element taken from lb+ub/2
         xr[self.nx::self.nx] = (lb + ub) / 2
+        #xr[self.nx::self.nx] = np.ones(self.N) * 0
+
 
         # Get equality matrix
         Ax = sparse.kron(sparse.eye(self.N + 1),
@@ -156,6 +184,7 @@ class MPC:
         uineq = np.hstack([xmax_dyn, umax_dyn])
 
         # Get upper and lower bound vectors for inequality constraints
+        # [:] notation - create a copy of state
         x0 = np.array(self.model.spatial_state[:])
         leq = np.hstack([-x0, uq])
         ueq = leq
@@ -168,10 +197,19 @@ class MPC:
         P = sparse.block_diag([sparse.kron(sparse.eye(self.N), self.Q), self.QN,
              sparse.kron(sparse.eye(self.N), self.R)], format='csc')
 
+        # np.tile - Construct an array by repeating matrix the number of times given by reps
+        # Q.A - get default array from sparsed array
         q = np.hstack(
             [-np.tile(np.diag(self.Q.A), self.N) * xr[:-self.nx],
              -self.QN.dot(xr[-self.nx:]),
              -np.tile(np.diag(self.R.A), self.N) * ur])
+
+        # FIXME: Perhaps there is an error in the initialization above: probable fix
+        # FIXME: But probably not, because there is no point every time multiply QN on zeros
+        # q = np.hstack(
+        #     [-np.tile(np.diag(self.Q.A), self.N) * xr[self.nx:],
+        #      -self.QN.dot(xr[:self.nx]),
+        #      -np.tile(np.diag(self.R.A), self.N) * ur])
 
         # Initialize optimizer
         self.optimizer = osqp.OSQP()
@@ -203,6 +241,10 @@ class MPC:
 
         try:
             # Get control signals
+            anw_1 = dec.x
+            anw_2 = np.array(dec.x[-self.N*nu:])
+
+            # Get only X-es related to control and matrix R
             control_signals = np.array(dec.x[-self.N*nu:])
             control_signals[1::2] = np.arctan(control_signals[1::2] * self.model.length)
 
@@ -213,9 +255,13 @@ class MPC:
             self.current_control = control_signals
 
             # Get predicted spatial states
+            # Convert to two-dim array [prediction_id, state]
+            # All vector which correspond to matrices Q and QN (because N + 1)
             x = np.reshape(dec.x[:(self.N+1)*nx], (self.N+1, nx))
 
             # Update predicted temporal states
+            # Convert state from local to global coordinate frame
+            # Because by default x - offset from waypoint relative to waypoint itself
             self.current_prediction = self.update_prediction(x)
 
             # Get current control signal
