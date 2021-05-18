@@ -87,7 +87,6 @@ class MPC:
         xr = np.zeros(self.nx*(self.N+1))
 
         # Offset for equality constraint (due to B * (u - ur))
-        # WTF IS THAT
         uq = np.zeros(self.N * self.nx)
 
         # Dynamic state constraints
@@ -129,10 +128,9 @@ class MPC:
             # Equality constraint are constraints that always have to be enforced
 
             # It is the same
-            test = B_lin.dot(np.array([v_ref, kappa_ref])) - f
-            my_solution = np.array([0, delta_s * kappa_ref, - (2 * delta_s) / v_ref])
-            #print(f"{n} {test[2]}, {my_solution[2]} {test[2] == my_solution[2]}")
-
+            # test = B_lin.dot(np.array([v_ref, kappa_ref])) - f
+            # my_solution = np.array([0, delta_s * kappa_ref, - (2 * delta_s) / v_ref])
+            # print(f"{n} {test[2]}, {my_solution[2]} {test[2] == my_solution[2]}")
             uq[n * self.nx:(n+1)*self.nx] = B_lin.dot(np.array([v_ref, kappa_ref])) - f
 
             # Constrain maximum speed based on predicted car curvature
@@ -165,8 +163,6 @@ class MPC:
         # [self.nx::self.nx] - write to every nx (third) element, starting at index nx
         # That means first nx-elements stays zeros, and every nx-element taken from lb+ub/2
         xr[self.nx::self.nx] = (lb + ub) / 2
-        #xr[self.nx::self.nx] = np.ones(self.N) * 0
-
 
         # Get equality matrix
         Ax = sparse.kron(sparse.eye(self.N + 1),
@@ -201,18 +197,11 @@ class MPC:
              sparse.kron(sparse.eye(self.N), self.R)], format='csc')
 
         # np.tile - Construct an array by repeating matrix the number of times given by reps
-        # Q.A - get default array from sparsed array
+        # Q.A - get default array from sparse array
         q = np.hstack(
             [-np.tile(np.diag(self.Q.A), self.N) * xr[:-self.nx],
              -self.QN.dot(xr[-self.nx:]),
              -np.tile(np.diag(self.R.A), self.N) * ur])
-
-        # FIXME: Perhaps there is an error in the initialization above: probable fix
-        # FIXME: But probably not, because there is no point every time multiply QN on zeros
-        # q = np.hstack(
-        #     [-np.tile(np.diag(self.Q.A), self.N) * xr[self.nx:],
-        #      -self.QN.dot(xr[:self.nx]),
-        #      -np.tile(np.diag(self.R.A), self.N) * ur])
 
         # Initialize optimizer
         self.optimizer = osqp.OSQP()
@@ -245,10 +234,6 @@ class MPC:
         dec = self.optimizer.solve()
 
         try:
-            # Get control signals
-            anw_1 = dec.x
-            anw_2 = np.array(dec.x[-self.N*nu:])
-
             # Get only X-es related to control and matrix R
             control_signals = np.array(dec.x[-self.N*nu:])
             control_signals[1::2] = np.arctan(control_signals[1::2] * self.model.length)

@@ -159,10 +159,6 @@ class SpatialBicycleModel(ABC):
         # Declare temporal state variable | Initialization in sub-class
         self.temporal_state = None
 
-        # For visualisation
-        # self.velocity_profile = []
-        # self.reference_velocity_profile = []
-
     def s2t(self, reference_waypoint, reference_state):
         """
         Convert spatial state to temporal state given a reference waypoint.
@@ -248,7 +244,6 @@ class SpatialBicycleModel(ABC):
         # For visualisation purpose
         self.prev_delta = delta
         self.current_delta = self.prev_delta
-        #self.velocity_profile.append(v)
 
         # Compute temporal state derivatives
         x_dot = v * np.cos(self.temporal_state.psi)

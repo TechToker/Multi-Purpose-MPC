@@ -54,14 +54,10 @@ def GenerateControl(car):
     # Debug
     #N = 3
 
-    Q = sparse.diags([1.0, 0.0, 0.0])
+    #Q = sparse.diags([1.0, 0.0, 0.0])
+    Q = sparse.diags([1.0, 0.0, 0.05])
     R = sparse.diags([0.5, 0.0])
     QN = sparse.diags([1.0, 0.0, 0.0])
-
-    # Debug
-    # Q = sparse.diags([1.0, 2.0, 3.0])
-    # R = sparse.diags([4.0, 0])
-    # QN = sparse.diags([6.0, 7.0, 8.0])
 
     InputConstraints = {'umin': np.array([0.0, -np.tan(delta_max)/car.length]),
                         'umax': np.array([v_max, np.tan(delta_max)/car.length])}
@@ -74,11 +70,11 @@ def GenerateControl(car):
     return mpc_control
 
 
-def show_profiler(ref_path):
+def VelocityProfiler(ref_path):
     fig, (ax1, ax2) = plt.subplots(num=1, nrows=2)
 
-    vel_profile = ref_path.reference_velocity_profile #[:current_waypoint]
-    vel_constrained = ref_path.max_velocity_profile #[:current_waypoint]
+    vel_profile = ref_path.reference_velocity_profile
+    vel_constrained = ref_path.max_velocity_profile
 
     ax1.plot(np.linspace(0, len(vel_profile), num=len(vel_profile)), vel_profile, color='g', label='Solution')
     ax1.plot(np.linspace(0, len(vel_constrained), num=len(vel_constrained)), vel_constrained, color='deepskyblue', label='Reference')
@@ -89,8 +85,8 @@ def show_profiler(ref_path):
     ax1.legend()
 
     # Acceleration profile
-    vel_profile = ref_path.reference_velocity_profile #[:current_waypoint]
-    distance_between_wp = ref_path.distance_between_waypoints #[:current_waypoint]
+    vel_profile = ref_path.reference_velocity_profile
+    distance_between_wp = ref_path.distance_between_waypoints
 
     acc_profile = []
     for i in range(1, len(vel_profile)):
@@ -107,14 +103,17 @@ def show_profiler(ref_path):
     ax2.legend()
 
 
-def show_state_profiler(Ey, Ehead):
+def SpatialStateProfiler(spartial_st_log):
+    e_y = [item[0] for item in spartial_st_log]
+    e_head = [item[1] for item in spartial_st_log]
+
     fig, (ax1, ax2) = plt.subplots(num=2, nrows=2)
 
-    ax1.plot(np.linspace(0, len(Ey), num=len(Ey)), Ey, color='g')
+    ax1.plot(np.linspace(0, len(e_y), num=len(e_y)), e_y, color='g')
     ax1.set_ylabel('E_y')
     ax1.set_xlabel('Waypoint id')
 
-    ax2.plot(np.linspace(0, len(Ehead), num=len(Ehead)), Ehead, color='g')
+    ax2.plot(np.linspace(0, len(e_head), num=len(e_head)), e_head, color='g')
     ax2.set_ylabel('E_head')
     ax2.set_xlabel('Waypoint id')
 
@@ -135,7 +134,7 @@ def Simulation(car, reference_path, mpc):
     v_log = [0.0]
 
     # Velocity profile
-    show_profiler(reference_path)
+    VelocityProfiler(reference_path)
 
     # Until arrival at end of path
     while car.s < reference_path.length:
@@ -171,7 +170,7 @@ def Simulation(car, reference_path, mpc):
         plt.axis('off')
         plt.pause(0.001)
 
-    show_state_profiler([item[0] for item in mpc.spartial_st_log], [item[1] for item in mpc.spartial_st_log])
+    SpatialStateProfiler(mpc.spartial_st_log)
     plt.show()
 
 
