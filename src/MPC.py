@@ -60,6 +60,9 @@ class MPC:
         # Initialize Optimization Problem
         self.optimizer = osqp.OSQP()
 
+        # For profile visualization
+        self.spartial_st_log = []
+
     def _init_problem(self):
         """
         Initialize optimization problem for current time step.
@@ -232,6 +235,8 @@ class MPC:
         self.model.spatial_state = self.model.t2s(reference_state=
             self.model.temporal_state, reference_waypoint=
             self.model.current_waypoint)
+
+        self.spartial_st_log.append(self.model.spatial_state)
 
         # Initialize optimization problem
         self._init_problem()

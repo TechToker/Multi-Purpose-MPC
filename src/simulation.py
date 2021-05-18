@@ -80,11 +80,13 @@ def show_profiler(ref_path):
     vel_profile = ref_path.reference_velocity_profile #[:current_waypoint]
     vel_constrained = ref_path.max_velocity_profile #[:current_waypoint]
 
-    ax1.plot(np.linspace(0, len(vel_profile), num=len(vel_profile)), vel_profile, color='g')
-    ax1.plot(np.linspace(0, len(vel_constrained), num=len(vel_constrained)), vel_constrained, color='r')
+    ax1.plot(np.linspace(0, len(vel_profile), num=len(vel_profile)), vel_profile, color='g', label='Solution')
+    ax1.plot(np.linspace(0, len(vel_constrained), num=len(vel_constrained)), vel_constrained, color='deepskyblue', label='Reference')
 
     ax1.set_ylabel('Velocity')
     ax1.set_xlabel('Waypoint id')
+
+    ax1.legend()
 
     # Acceleration profile
     vel_profile = ref_path.reference_velocity_profile #[:current_waypoint]
@@ -94,14 +96,29 @@ def show_profiler(ref_path):
     for i in range(1, len(vel_profile)):
         acc_profile.append((vel_profile[i] - vel_profile[i - 1]) / (2 * distance_between_wp[i - 1]))
 
-    ax2.plot(range(0, len(acc_profile)), acc_profile, color='g')
+    ax2.plot(range(0, len(acc_profile)), acc_profile, color='g', label='Solution')
 
     # Boundaries
     ax2.plot(range(0, len(acc_profile)), np.ones(len(acc_profile)) * -0.1, color='r')
-    ax2.plot(range(0, len(acc_profile)), np.ones(len(acc_profile)) * 0.5, color='r')
+    ax2.plot(range(0, len(acc_profile)), np.ones(len(acc_profile)) * 0.5, color='r', label='Boundary')
 
     ax2.set_ylabel('Acceleration')
     ax2.set_xlabel('Waypoint id')
+    ax2.legend()
+
+
+def show_state_profiler(Ey, Ehead):
+    fig, (ax1, ax2) = plt.subplots(num=2, nrows=2)
+
+    ax1.plot(np.linspace(0, len(Ey), num=len(Ey)), Ey, color='g')
+    ax1.set_ylabel('E_y')
+    ax1.set_xlabel('Waypoint id')
+
+    ax2.plot(np.linspace(0, len(Ehead), num=len(Ehead)), Ehead, color='g')
+    ax2.set_ylabel('E_head')
+    ax2.set_xlabel('Waypoint id')
+
+    ax1.legend()
 
 
 def Simulation(car, reference_path, mpc):
@@ -154,6 +171,7 @@ def Simulation(car, reference_path, mpc):
         plt.axis('off')
         plt.pause(0.001)
 
+    show_state_profiler([item[0] for item in mpc.spartial_st_log], [item[1] for item in mpc.spartial_st_log])
     plt.show()
 
 

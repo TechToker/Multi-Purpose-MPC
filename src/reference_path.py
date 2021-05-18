@@ -312,8 +312,8 @@ class ReferencePath:
         # Set optimization horizon
         N = self.n_waypoints - 1
 
-        # # Debug
-        # N = 3
+        # Debug
+        #N = 3
 
         # Constraints
         a_min = np.ones(N-1) * Constraints['a_min']
